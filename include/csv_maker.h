@@ -20,7 +20,7 @@
  */
 //std::ofstream output("output_mc_numi_test_mu100ph50.log"); // analysis
 //std::ofstream output("output_mc_numi_1mu0pi1pi0_masscut.log");
-std::ofstream output("output_mc_bnb_1mu0pi1pi0_masscut.log");
+std::ofstream output("output_mc_bnb_1mu0pi1pi0_masscut_TEST.log");
 //std::ofstream output("output_mc_signal.log"); // signal/efficiency
 //std::ofstream output("output_mc_selected.log"); // selected/purity
 
@@ -66,10 +66,10 @@ void write_pair(const caf::SRSpillProxy* sr, const caf::SRInteractionTruthDLPPro
 	  << CSV(vars::category(i))
 	  << CSV(vars::category_topology(i))
 	  << CSV(vars::category_interaction_mode(i))
-    //<< CSV(vars::muon_momentum_mag(i))
-    //<< CSV(vars::muon_momentum_mag(j))
-    //<< CSV(vars::muon_costheta_z(i))
-    //<< CSV(vars::muon_costheta_z(j))
+	  << CSV(vars::muon_momentum_mag(i))
+	  << CSV(vars::muon_momentum_mag(j))
+	  << CSV(vars::muon_beam_costheta(i))
+	  << CSV(vars::muon_beam_costheta(j))
 	  << CSV(vars::pi0_leading_photon_energy(i))
 	  << CSV(vars::pi0_leading_photon_energy(j))
 	  << CSV(vars::pi0_leading_photon_conv_dist(i))
@@ -82,14 +82,14 @@ void write_pair(const caf::SRSpillProxy* sr, const caf::SRInteractionTruthDLPPro
           << CSV(vars::pi0_subleading_photon_conv_dist(j))
 	  << CSV(vars::pi0_subleading_photon_cosphi(i))
 	  << CSV(vars::pi0_subleading_photon_cosphi(j))
-    //<< CSV(vars::pi0_costheta(i))
-    //<< CSV(vars::pi0_costheta(j))
+	  << CSV(vars::pi0_costheta(i))
+	  << CSV(vars::pi0_costheta(j))
 	  << CSV(vars::pi0_mass(i))
 	  << CSV(vars::pi0_mass(j))
-    //<< CSV(vars::pi0_momentum_mag(i))
-    //<< CSV(vars::pi0_momentum_mag(j))
-    //<< CSV(vars::pi0_costheta_z(i))
-    //<< CSV(vars::pi0_costheta_z(j))
+	  << CSV(vars::pi0_momentum_mag(i))
+	  << CSV(vars::pi0_momentum_mag(j))
+	  << CSV(vars::pi0_beam_costheta(i))
+	  << CSV(vars::pi0_beam_costheta(j))
     //<< CSV(vars::transverse_momentum(i))
     //<< CSV(vars::transverse_momentum(j))
 	  << CSV(cuts::all_1mu0pi2gamma_cut(j))

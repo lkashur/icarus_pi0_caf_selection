@@ -166,8 +166,50 @@ namespace vars
         }
 
     /**
+     * Find muon momentum (magnitude).
+     * Assumes 1mu2gamma cut has been made.
+     * @tparam T the type of interaction (true or reco).
+     * @param interaction to operate on.
+     * @return the muon momentum.
+     */
+    template<class T> double muon_momentum_mag(const T & interaction)
+      {
+	if constexpr (std::is_same_v<T, caf::SRInteractionTruthDLPProxy>)
+                       {
+                         truth_inter s = cuts::true_interaction_info(interaction);
+                         return s.muon_momentum_mag;
+                       }
+	else
+	  {
+	    reco_pi0 s = cuts::reco_pi0_info(interaction);
+            return s.muon_momentum_mag;
+	  }
+      }
+
+    /**
+     * Find muon-beam angle (cosine).
+     * Assumes 1mu2gamma cut has been made.
+     * @tparam T the type of interaction (true or reco).
+     * @param interaction to operate on.
+     * @return the muon-beam angle.
+     */
+    template<class T> double muon_beam_costheta(const T & interaction)
+      {
+        if constexpr (std::is_same_v<T, caf::SRInteractionTruthDLPProxy>)
+                       {
+                         truth_inter s = cuts::true_interaction_info(interaction);
+                         return s.muon_beam_costheta;
+                       }
+        else
+          {
+            reco_pi0 s = cuts::reco_pi0_info(interaction);
+            return s.muon_beam_costheta;
+          }
+      }
+
+    /**
      * Find pi0 leading photon energy.
-     * Assumes 2gamma cut has been made.
+     * Assumes 1mu2gamma cut has been made.
      * @tparam T the type of interaction (true or reco).
      * @param interaction to operate on.
      * @return the pi0 leading photon energy.
@@ -293,8 +335,29 @@ namespace vars
       }
 
     /**
+     * Find pi0 opening angle (cosine).
+     * Assumes 1mu2gamma cut has been made.
+     * @tparam T the type of interaction (true or reco).
+     * @param interaction to operate on.
+     * @return the pi0 opening angle.
+     */
+    template<class T> double pi0_costheta(const T & interaction)
+      {
+	if constexpr (std::is_same_v<T, caf::SRInteractionTruthDLPProxy>)
+                       {
+                         truth_inter s = cuts::true_interaction_info(interaction);
+                         return s.pi0_costheta;
+                       }
+	else
+	  {
+	    reco_pi0 s = cuts::reco_pi0_info(interaction);
+            return s.costheta;
+	  }
+      }
+    
+    /**
      * Find pi0 mass.
-     * Assues 2gamma cut has been made.
+     * Assues 1mu2gamma cut has been made.
      * @tparam T the type of interaction (true or reco).
      * @param interaction to operate on.
      * @return the pi0 mass.
@@ -312,6 +375,50 @@ namespace vars
 	    return s.mass;
 	  }
       }
+
+    /**
+     * Find pi0 momentum (magnitude).
+     * Assumes 1mu2gamma cut has been made.
+     * @tparam T the type of interaction (true or reco).
+     * @param interaction to operate on.
+     * @return the pi0 momentum.
+     */
+    template<class T> double pi0_momentum_mag(const T & interaction)
+      {
+	if constexpr (std::is_same_v<T, caf::SRInteractionTruthDLPProxy>)
+                       {
+                         truth_inter s = cuts::true_interaction_info(interaction);
+                         return s.pi0_momentum_mag;
+                       }
+	else
+	  {
+	    reco_pi0 s = cuts::reco_pi0_info(interaction);
+	    return s.momentum_mag;
+	  }
+
+      }
+    
+    /**
+     * Find pi0-beam angle (cosine).
+     * Assumes 1mu2gamma cut has been made.
+     * @tparam T the type of interaction (true or reco).
+     * @param interaction to operate on.
+     * @return the pi0-beam angle.
+     */
+    template<class T> double pi0_beam_costheta(const T & interaction)
+      {
+	if constexpr (std::is_same_v<T, caf::SRInteractionTruthDLPProxy>)
+                       {
+                         truth_inter s = cuts::true_interaction_info(interaction);
+                         return s.pi0_beam_costheta;
+                       }
+	else
+	  {
+	    reco_pi0 s = cuts::reco_pi0_info(interaction);
+            return s.beam_costheta;
+	  }
+      }
+    
 }
 
 #endif

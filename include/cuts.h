@@ -2,7 +2,7 @@
  * @file cuts.h
  * @brief Header file for definitions of selection cuts.
  * @author justin.mueller@colostate.edu 
-*/
+ */
 
 #include <functional>
 #include <vector>
@@ -17,11 +17,11 @@
 
 #define MIN_PHOTON_ENERGY_BNB 25.0
 #define MIN_MUON_ENERGY_BNB 143.425
-#define MIN_PION_ENERGY_BNB 25
+#define MIN_PION_ENERGY_BNB 25.0
 
 #define MIN_PHOTON_ENERGY_NUMI 50.0
 #define MIN_MUON_ENERGY_NUMI 250.345
-#define MIN_PION_ENERGY_NUMI 25
+#define MIN_PION_ENERGY_NUMI 25.0
 
 struct truth_inter {
   int num_primary_muons;
@@ -35,15 +35,21 @@ struct truth_inter {
   bool has_contained_tracks;
   bool is_neutrino;
   bool is_cc;
+  double muon_momentum_mag;
+  double muon_beam_costheta;
   double pi0_leading_photon_energy;
   double pi0_leading_photon_conv_dist;
   double pi0_subleading_photon_energy;
   double pi0_subleading_photon_conv_dist;
-  double pi0_cos_theta;
+  double pi0_costheta;
   double pi0_mass;
+  double pi0_momentum_mag;
+  double pi0_beam_costheta;
 };
 
 struct reco_pi0 {
+  double muon_momentum_mag;
+  double muon_beam_costheta;
   double leading_photon_energy;
   double leading_photon_cosphi;
   double leading_photon_conv_dist;
@@ -52,37 +58,29 @@ struct reco_pi0 {
   double subleading_photon_conv_dist;
   double costheta;
   double mass;
+  double momentum_mag;
+  double beam_costheta;
 };
-
-/*
-#include <functional>
-#include <vector>
-#include <TVector3.h>
-#include <string>
-#include <sstream>
-#include <numeric>
-#include <iostream>
-*/
 
 namespace cuts
 {
-    /**
-     * Apply a cut on whether a match exists.
-     * @tparam T the object type (true or reco, interaction or particle).
-     * @param obj the object to select on.
-     * @return true if the object is matched.
-    */
+  /**
+   * Apply a cut on whether a match exists.
+   * @tparam T the object type (true or reco, interaction or particle).
+   * @param obj the object to select on.
+   * @return true if the object is matched.
+   */
     template<class T>
-        bool matched(const T & obj) { return obj.match_ids.size() > 0; }
+      bool matched(const T & obj) { return obj.match_ids.size() > 0; }
 
     /**
      * Apply a cut on the validity of the flash match.
      * @tparam T the type of interaction (true or reco).
      * @param interaction on which to place the flash validity cut.
      * @return true if the interaction is flash matched and the time is valid.
-    */
+     */
     template<class T>
-        bool valid_flashmatch(const T & interaction) { return !std::isnan(interaction.flash_time) && interaction.is_flash_matched == 1; }
+      bool valid_flashmatch(const T & interaction) { return !std::isnan(interaction.flash_time) && interaction.is_flash_matched == 1; }
 
     /**
      * Check if the particle meets final state signal requirements.
@@ -93,7 +91,7 @@ namespace cuts
      * @tparam T the type of particle (true or reco).
      * @param particle to check.
      * @return true if the particle is a final state signal particle.
-    */
+     */
     template<class T> bool final_state_signal(const T & p)
       {
 	bool passes(false);
@@ -102,10 +100,10 @@ namespace cuts
 	    double energy(p.pid > 1 ? p.csda_ke : p.calo_ke);
 	    if constexpr (std::is_same_v<T, caf::SRParticleTruthDLPProxy>)
 			   energy = p.ke;
-	    
+	        
 	    // Photons have minimum energy requirement (50 MeV)
 	    if(p.pid == 0 && energy >= MIN_PHOTON_ENERGY_BNB)
- 	      {
+	      {
 		passes = true;
 	      }
 	    // Electrons have no energy requirement
@@ -145,16 +143,16 @@ namespace cuts
      * interaction.
      */
     template<class T>
-        std::vector<uint32_t> count_primaries(const T & interaction)
-        {
-            std::vector<uint32_t> counts(5, 0);
-            for(auto &p : interaction.particles)
-            {
-                if(final_state_signal(p))
-                    ++counts[p.pid];
-            }
-            return counts;
-        }
+      std::vector<uint32_t> count_primaries(const T & interaction)
+      {
+	std::vector<uint32_t> counts(5, 0);
+	for(auto &p : interaction.particles)
+	  {
+	    if(final_state_signal(p))
+	      ++counts[p.pid];
+	  }
+	return counts;
+      }
 
     /**
      * Find the topology of the interaction with cuts applied to each particle.
@@ -163,17 +161,17 @@ namespace cuts
      * @return the topology of the interaction as a string (e.g 0ph0e1mu0pi1p).
      */
     template<class T>
-        std::string topology(const T & interaction)
-        {
-            std::vector<uint32_t> counts(count_primaries(interaction));
-            std::stringstream ss;
+      std::string topology(const T & interaction)
+      {
+	std::vector<uint32_t> counts(count_primaries(interaction));
+	std::stringstream ss;
             ss  << counts[0] << "ph"
                 << counts[1] << "e"
                 << counts[2] << "mu"
                 << counts[3] << "pi"
                 << counts[4] << "p";
             return ss.str();
-        }
+      }
 
     /**
      * Apply selection for 1mu + 2gamma + 0pi + X topology.
@@ -198,13 +196,26 @@ namespace cuts
 	reco_pi0 s;
 
 	// Loop over particles
+	size_t leading_muon_index(0);
 	size_t leading_photon_index(0);
 	size_t subleading_photon_index(0);
+	double max_csda_ke(-99999);
 	double max_calo_ke0(-99999);
 	double max_calo_ke1(-99999);
 	for(size_t i(0); i < interaction.particles.size(); ++i)
 	  {
 	    const auto & p = interaction.particles[i];
+
+	    // Primary muons
+	    if(p.is_primary && p.pid == 2 && p.csda_ke >= MIN_MUON_ENERGY_BNB)
+	      {
+		if(p.csda_ke > max_csda_ke)
+		  {
+		    max_csda_ke = p.csda_ke;
+		    leading_muon_index = i;
+		  }
+	      }
+
 	    // Primary photons
 	    if(p.is_primary && p.pid == 0 && p.calo_ke >= MIN_PHOTON_ENERGY_BNB)
 	      {
@@ -231,8 +242,17 @@ namespace cuts
 	  }
 
 	// Get info about pi0 from selected photons
+	TVector3 beamdir(0, 0, 1); // BNB
+	//TVector3 beamdir(0.39431672, 0.04210058, 0.91800973); // NuMI
 	TVector3 vertex(interaction.vertex[0], interaction.vertex[1], interaction.vertex[2]);
-
+	
+	TVector3 muon_momentum;
+	muon_momentum.SetX(interaction.particles[leading_muon_index].momentum[0]);
+	muon_momentum.SetY(interaction.particles[leading_muon_index].momentum[1]);
+	muon_momentum.SetZ(interaction.particles[leading_muon_index].momentum[2]);
+	double muon_momentum_mag = muon_momentum.Mag();
+	double muon_beam_costheta = muon_momentum.Unit().Dot(beamdir);
+	
 	double leading_photon_energy = interaction.particles[leading_photon_index].calo_ke;
 	TVector3 leading_photon_start_point;
 	leading_photon_start_point.SetX(interaction.particles[leading_photon_index].start_point[0]);
@@ -250,7 +270,8 @@ namespace cuts
 	leading_photon_start_dir.SetZ(interaction.particles[leading_photon_index].start_dir[2]);
 	leading_photon_start_dir = leading_photon_start_dir.Unit();
 	double leading_photon_cosphi = leading_photon_dir.Dot(leading_photon_start_dir);
-	
+	TVector3 leading_photon_momentum = leading_photon_energy * leading_photon_dir;
+
 	double subleading_photon_energy = interaction.particles[subleading_photon_index].calo_ke;
         TVector3 subleading_photon_start_point;
         subleading_photon_start_point.SetX(interaction.particles[subleading_photon_index].start_point[0]);
@@ -268,11 +289,17 @@ namespace cuts
 	subleading_photon_start_dir.SetZ(interaction.particles[subleading_photon_index].start_dir[2]);
 	subleading_photon_start_dir = subleading_photon_start_dir.Unit();
 	double subleading_photon_cosphi = subleading_photon_dir.Dot(subleading_photon_start_dir);
+	TVector3 subleading_photon_momentum = subleading_photon_energy * subleading_photon_dir;
 
 	double cos_opening_angle = leading_photon_dir.Dot(subleading_photon_dir);
 	double mass = sqrt(2*leading_photon_energy*subleading_photon_energy*(1-cos_opening_angle));
+	TVector3 momentum = leading_photon_momentum + subleading_photon_momentum;
+	double momentum_mag = momentum.Mag();
+	double beam_costheta = momentum.Unit().Dot(beamdir);
 
 	// Output
+	s.muon_momentum_mag = muon_momentum_mag;
+	s.muon_beam_costheta = muon_beam_costheta;
 	s.leading_photon_energy = leading_photon_energy;
 	s.leading_photon_cosphi = leading_photon_cosphi;
 	s.leading_photon_conv_dist = leading_photon_conv_dist;
@@ -281,6 +308,8 @@ namespace cuts
 	s.subleading_photon_conv_dist = subleading_photon_conv_dist;
 	s.costheta = cos_opening_angle;
 	s.mass = mass;
+	s.momentum_mag = momentum_mag;
+	s.beam_costheta = beam_costheta;
 
 	return s;
       }
@@ -294,10 +323,10 @@ namespace cuts
      * @return true if the vertex is in the fiducial volume.
      */
     template<class T>
-        bool fiducial_cut(const T & interaction)
-        {
-            return interaction.is_fiducial && !(interaction.vertex[0] > 210.215 && interaction.vertex[1] > 60 && (interaction.vertex[2] > 290 && interaction.vertex[2] < 390));
-        }
+      bool fiducial_cut(const T & interaction)
+      {
+	return interaction.is_fiducial && !(interaction.vertex[0] > 210.215 && interaction.vertex[1] > 60 && (interaction.vertex[2] > 290 && interaction.vertex[2] < 390));
+      }
     
     /**
      * Apply a containment volume cut. All points within the interaction must be
@@ -307,7 +336,7 @@ namespace cuts
      * @return true if the interaction is contained.
      */
     template<class T>
-        bool containment_cut(const T & interaction) { return interaction.is_contained; }
+      bool containment_cut(const T & interaction) { return interaction.is_contained; }
 
     /**
      * Apply a containment cut to all primary tracks in interaction.
@@ -355,6 +384,8 @@ namespace cuts
 	TVector3 vertex(interaction.vertex[0], interaction.vertex[1], interaction.vertex[2]);
 
 	// Loop over particles
+	size_t leading_muon_index(0);
+	double max_csda_ke(-99999);
 	for(size_t i(0); i < interaction.particles.size(); ++i)
 	  {
 	    const auto & p = interaction.particles[i];
@@ -364,6 +395,13 @@ namespace cuts
 	      {
 		primary_muon_count++;
 		if(p.ke >= MIN_MUON_ENERGY_BNB) primary_muon_count_thresh++;
+		
+		if(p.ke > max_csda_ke)
+		  {
+		    max_csda_ke = p.ke;
+		    leading_muon_index = i;
+		  }
+		
 	      }
 	    // Primary pions
 	    if(p.pid == 3 && p.is_primary)
@@ -416,6 +454,11 @@ namespace cuts
 	s.is_cc = is_cc;
 	
 	// Add true pi0 info, if it exists
+	TVector3 beamdir(0, 0, 1); // BNB
+        //TVector3 beamdir(0.39431672, 0.04210058, 0.91800973); // NuMI
+
+	double muon_momentum_mag;
+	double muon_beam_costheta;
 	double pi0_leading_photon_energy;
 	TVector3 pi0_leading_photon_dir;
 	double pi0_leading_photon_conv_dist;
@@ -424,8 +467,10 @@ namespace cuts
 	TVector3 pi0_subleading_photon_dir;
 	double pi0_subleading_photon_conv_dist;
 
-	double pi0_cos_theta;
+	double pi0_costheta;
 	double pi0_mass;
+	double pi0_momentum_mag;
+	double pi0_beam_costheta;
 
 	vector<size_t> pi0_photon_indices;
 	if(primary_pi0_count_thresh == 1)
@@ -440,6 +485,15 @@ namespace cuts
 		      }
 		  }
 	      }
+
+	    const auto & muon = interaction.particles[leading_muon_index];
+	    TVector3 muon_momentum;
+	    muon_momentum.SetX(muon.momentum[0]);
+	    muon_momentum.SetY(muon.momentum[1]);
+	    muon_momentum.SetZ(muon.momentum[2]);
+	    double muon_momentum_mag = muon_momentum.Mag();
+	    double muon_beam_costheta = muon_momentum.Unit().Dot(beamdir);
+	    
 
 	    const auto & pi0_photon0 = interaction.particles[pi0_photon_indices[0]];
 	    const auto & pi0_photon1 = interaction.particles[pi0_photon_indices[1]];
@@ -457,28 +511,37 @@ namespace cuts
 	      }
 	    const auto & pi0_leading_photon = interaction.particles[leading_photon_index];
 	    const auto & pi0_subleading_photon = interaction.particles[subleading_photon_index];
-	    
+	        
 	    pi0_leading_photon_energy = pi0_leading_photon.ke;
 	    TVector3 pi0_leading_photon_start_point(pi0_leading_photon.start_point[0], pi0_leading_photon.start_point[1], pi0_leading_photon.start_point[2]);
 	    TVector3 pi0_leading_photon_dir(pi0_leading_photon.momentum[0], pi0_leading_photon.momentum[1], pi0_leading_photon.momentum[2]);
 	    pi0_leading_photon_dir = pi0_leading_photon_dir.Unit();
 	    pi0_leading_photon_conv_dist = (vertex - pi0_leading_photon_start_point).Mag();
+	    TVector3 pi0_leading_photon_momentum(pi0_leading_photon.momentum[0], pi0_leading_photon.momentum[1], pi0_leading_photon.momentum[2]);
 
 	    pi0_subleading_photon_energy = pi0_subleading_photon.ke;
 	    TVector3 pi0_subleading_photon_start_point(pi0_subleading_photon.start_point[0], pi0_subleading_photon.start_point[1], pi0_subleading_photon.start_point[2]);
 	    TVector3 pi0_subleading_photon_dir(pi0_subleading_photon.momentum[0], pi0_subleading_photon.momentum[1], pi0_subleading_photon.momentum[2]);
             pi0_subleading_photon_dir = pi0_subleading_photon_dir.Unit();
 	    pi0_subleading_photon_conv_dist = (vertex - pi0_subleading_photon_start_point).Mag();
-
-	    pi0_cos_theta = pi0_leading_photon_dir.Dot(pi0_subleading_photon_dir);
-	    pi0_mass = sqrt(2*pi0_leading_photon_energy*pi0_subleading_photon_energy*(1-pi0_cos_theta));
+	    TVector3 pi0_subleading_photon_momentum(pi0_subleading_photon.momentum[0], pi0_subleading_photon.momentum[1], pi0_subleading_photon.momentum[2]);
 	    
+	    TVector3 pi0_momentum = pi0_leading_photon_momentum + pi0_subleading_photon_momentum;
+	    pi0_beam_costheta = pi0_momentum.Unit().Dot(beamdir);
+
+	    pi0_costheta = pi0_leading_photon_dir.Dot(pi0_subleading_photon_dir);
+	    pi0_mass = sqrt(2*pi0_leading_photon_energy*pi0_subleading_photon_energy*(1-pi0_costheta));
+
+	    s.muon_momentum_mag = muon_momentum_mag;
+	    s.muon_beam_costheta = muon_beam_costheta;
 	    s.pi0_leading_photon_energy = pi0_leading_photon_energy;
 	    s.pi0_leading_photon_conv_dist = pi0_leading_photon_conv_dist;
 	    s.pi0_subleading_photon_energy = pi0_subleading_photon_energy;
 	    s.pi0_subleading_photon_conv_dist = pi0_subleading_photon_conv_dist;
-	    s.pi0_cos_theta = pi0_cos_theta;
+	    s.pi0_costheta = pi0_costheta;
 	    s.pi0_mass = pi0_mass;
+	    s.pi0_momentum_mag = pi0_momentum.Mag();
+	    s.pi0_beam_costheta = pi0_beam_costheta;
 	  }
 	
 	return s;
@@ -518,7 +581,7 @@ namespace cuts
 	  }
 	else
 	  {
-	  return (interaction.flash_time >= 0) && (interaction.flash_time <= 9.6);
+	    return (interaction.flash_time >= 0) && (interaction.flash_time <= 9.6);
 	  }
       }
     
@@ -551,9 +614,9 @@ namespace cuts
      * @tparam T the type of interaction (true or reco).
      * @param interaction to select on.
      * @return true if the interaction is a neutrino interaction.
-    */
+     */
     template<class T>
-        bool neutrino(const T & interaction) { return interaction.nu_id > -1; }
+      bool neutrino(const T & interaction) { return interaction.nu_id > -1; }
 
     /**
      * Define the true cosmic interaction classification.
@@ -562,25 +625,25 @@ namespace cuts
      * @return true if the interaction is a cosmic.
      */
     template<class T>
-        bool cosmic(const T & interaction) { return interaction.nu_id == -1; }
+      bool cosmic(const T & interaction) { return interaction.nu_id == -1; }
 
     /**
      * Define the true neutrino interaction classification.
      * @tparam T the type of interaction (true or reco).
      * @param interaction to select on.
      * @return true if the interaction is a neutrino interaction.
-    */
+     */
     template<class T>
-        bool matched_neutrino(const T & interaction) { return interaction.match_ids.size() > 0 && neutrino(interaction); }
+      bool matched_neutrino(const T & interaction) { return interaction.match_ids.size() > 0 && neutrino(interaction); }
 
     /**
      * Define the true neutrino interaction classification.
      * @tparam T the type of interaction (true or reco).
      * @param interaction to select on.
      * @return true if the interaction is a neutrino interaction.
-    */
+     */
     template<class T>
-        bool matched_cosmic(const T & interaction) { return interaction.match_ids.size() > 0 && cosmic(interaction); }
+      bool matched_cosmic(const T & interaction) { return interaction.match_ids.size() > 0 && cosmic(interaction); }
 
     /**
      * Define the true 1mu1pi0 interaction classification.
