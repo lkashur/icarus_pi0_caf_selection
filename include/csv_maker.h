@@ -90,8 +90,8 @@ void write_pair(const caf::SRSpillProxy* sr, const caf::SRInteractionTruthDLPPro
 	  << CSV(vars::pi0_momentum_mag(j))
 	  << CSV(vars::pi0_beam_costheta(i))
 	  << CSV(vars::pi0_beam_costheta(j))
-    //<< CSV(vars::transverse_momentum(i))
-    //<< CSV(vars::transverse_momentum(j))
+	  << CSV(vars::transverse_momentum_mag(i))
+	  << CSV(vars::transverse_momentum_mag(j))
 	  << CSV(cuts::all_1mu0pi2gamma_cut(j))
 	  << std::endl;
 }

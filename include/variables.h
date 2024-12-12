@@ -418,6 +418,27 @@ namespace vars
             return s.beam_costheta;
 	  }
       }
+
+    /**
+     *
+     *
+     *
+     *
+     */
+    template<class T> double transverse_momentum_mag(const T & interaction)
+      {
+	if constexpr (std::is_same_v<T, caf::SRInteractionTruthDLPProxy>)
+                       {
+                         truth_inter s = cuts::true_interaction_info(interaction);
+                         return s.transverse_momentum_mag;
+                       }
+	else
+	  {
+	    reco_pi0 s = cuts::reco_pi0_info(interaction);
+	    return s.transverse_momentum_mag;
+	  }
+	
+      }
     
 }
 

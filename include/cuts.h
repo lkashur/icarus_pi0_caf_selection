@@ -31,6 +31,7 @@ struct truth_inter {
   int num_primary_pi0s;
   int num_primary_pi0s_thresh;
   int num_nonprimary_pi0s;
+  double transverse_momentum_mag;
   bool is_fiducial;
   bool has_contained_tracks;
   bool is_neutrino;
@@ -48,6 +49,7 @@ struct truth_inter {
 };
 
 struct reco_pi0 {
+  double transverse_momentum_mag;
   double muon_momentum_mag;
   double muon_beam_costheta;
   double leading_photon_energy;
@@ -195,42 +197,69 @@ namespace cuts
       {
 	reco_pi0 s;
 
-	// Loop over particles
+	TVector3 vertex(interaction.vertex[0], interaction.vertex[1], interaction.vertex[2]);
+	TVector3 beamdir(0, 0, 1); // BNB
+        //TVector3 beamdir(0.39431672, 0.04210058, 0.91800973); // NuMI
+	double pT0(0), pT1(0), pT2(0);
 	size_t leading_muon_index(0);
 	size_t leading_photon_index(0);
 	size_t subleading_photon_index(0);
 	double max_csda_ke(-99999);
 	double max_calo_ke0(-99999);
 	double max_calo_ke1(-99999);
+	// Loop over particles
 	for(size_t i(0); i < interaction.particles.size(); ++i)
 	  {
 	    const auto & p = interaction.particles[i];
 
-	    // Primary muons
-	    if(p.is_primary && p.pid == 2 && p.csda_ke >= MIN_MUON_ENERGY_BNB)
+	    // Primaries
+	    if(p.is_primary)
 	      {
-		if(p.csda_ke > max_csda_ke)
-		  {
-		    max_csda_ke = p.csda_ke;
-		    leading_muon_index = i;
-		  }
-	      }
 
-	    // Primary photons
-	    if(p.is_primary && p.pid == 0 && p.calo_ke >= MIN_PHOTON_ENERGY_BNB)
-	      {
-		if(p.calo_ke > max_calo_ke0)
+		// Transverse momentum calculation
+		// pT = p - pL                                                                  
+		//    = (p dot beamdir) * beamdir
+		TVector3 _p(p.momentum[0], p.momentum[1], p.momentum[2]);
+                TVector3 pL = _p.Dot(beamdir) * beamdir;
+                TVector3 pT = _p - pL;
+
+		// Muons
+		if(p.pid == 2 && p.csda_ke >= MIN_MUON_ENERGY_BNB)
 		  {
-		    max_calo_ke0 = p.calo_ke;
-		    leading_photon_index = i;
+		    if(p.csda_ke > max_csda_ke)
+		      {
+			max_csda_ke = p.csda_ke;
+			leading_muon_index = i;
+		      }
 		  }
-	      } // end photon loop
+		// Photons
+		if(p.pid == 0 && p.calo_ke >= MIN_PHOTON_ENERGY_BNB)
+		  {
+		    
+		    TVector3 _p((p.start_point[0] - vertex[0]), (p.start_point[1] - vertex[1]), (p.start_point[2] - vertex[2]));
+		    _p = p.calo_ke * _p.Unit();
+		    TVector3 pL = _p.Dot(beamdir) * beamdir;
+		    TVector3 pT = _p - pL;
+
+		    if(p.calo_ke > max_calo_ke0)
+		      {
+			max_calo_ke0 = p.calo_ke;
+			leading_photon_index = i;
+		      }
+		  }
+		
+		pT0 += pT[0];
+                pT1 += pT[1];
+                pT2 += pT[2];
+
+	      } // end primary loop
 	  } // end particle loop
 
+	// Second loop to find subleading photon
 	for(size_t i(0); i < interaction.particles.size(); ++i)
 	  {
 	    const auto & p = interaction.particles[i];
-	    // Priary photons
+	    // Primary photons
 	    if(p.is_primary && p.pid == 0 && p.calo_ke >= MIN_PHOTON_ENERGY_BNB)
 	      {
 		if(p.calo_ke > max_calo_ke1 && p.calo_ke < max_calo_ke0)
@@ -239,13 +268,9 @@ namespace cuts
 		    subleading_photon_index = i;
 		  }
 	      }
-	  }
+	  } // end particle loop
 
 	// Get info about pi0 from selected photons
-	TVector3 beamdir(0, 0, 1); // BNB
-	//TVector3 beamdir(0.39431672, 0.04210058, 0.91800973); // NuMI
-	TVector3 vertex(interaction.vertex[0], interaction.vertex[1], interaction.vertex[2]);
-	
 	TVector3 muon_momentum;
 	muon_momentum.SetX(interaction.particles[leading_muon_index].momentum[0]);
 	muon_momentum.SetY(interaction.particles[leading_muon_index].momentum[1]);
@@ -298,6 +323,7 @@ namespace cuts
 	double beam_costheta = momentum.Unit().Dot(beamdir);
 
 	// Output
+	s.transverse_momentum_mag = sqrt(pow(pT0, 2) + pow(pT1, 2) + pow(pT2, 2));
 	s.muon_momentum_mag = muon_momentum_mag;
 	s.muon_beam_costheta = muon_beam_costheta;
 	s.leading_photon_energy = leading_photon_energy;
@@ -368,6 +394,9 @@ namespace cuts
       {
 	truth_inter s;
 
+	TVector3 beamdir(0, 0, 1); // BNB
+        //TVector3 beamdir(0.39431672, 0.04210058, 0.91800973); // NuMI
+
 	int primary_muon_count(0);
 	int primary_muon_count_thresh(0);
 	int primary_pion_count(0);
@@ -375,6 +404,7 @@ namespace cuts
 	int primary_pi0_count(0);
 	int primary_pi0_count_thresh(0);
 	int nonprimary_pi0_count(0);
+	double pT0(0), pT1(0), pT2(0);
 	bool is_neutrino(false);
 	bool is_cc(false);
 	//unordered_map< int, vector<double> > primary_pi0_map;
@@ -389,36 +419,54 @@ namespace cuts
 	for(size_t i(0); i < interaction.particles.size(); ++i)
 	  {
 	    const auto & p = interaction.particles[i];
+	    
+	    // Primary particles
+	    if(p.is_primary)
+	      {
+		// Transverse momentum 
+		// pT = p - pL
+		//    =  (p dot beamdir) * beamdir
+		TVector3 _p(p.momentum[0], p.momentum[1], p.momentum[2]);
+		TVector3 pL = _p.Dot(beamdir) * beamdir;
+		TVector3 pT = _p - pL;
+		pT0 += pT[0];
+		pT1 += pT[1];
+		pT2 += pT[2];
 
-	    // Primary muons
-	    if(p.pid == 2 && p.is_primary)
-	      {
-		primary_muon_count++;
-		if(p.ke >= MIN_MUON_ENERGY_BNB) primary_muon_count_thresh++;
-		
-		if(p.ke > max_csda_ke)
+		// Muons
+		if(p.pid == 2)
 		  {
-		    max_csda_ke = p.ke;
-		    leading_muon_index = i;
+		    primary_muon_count++;
+		    if(p.ke >= MIN_MUON_ENERGY_BNB) primary_muon_count_thresh++;
+		    if(p.ke > max_csda_ke)
+		      {
+			max_csda_ke = p.ke;
+			leading_muon_index = i;
+		      }
 		  }
-		
-	      }
-	    // Primary pions
-	    if(p.pid == 3 && p.is_primary)
+		// Pions
+		if(p.pid == 3)
+		  {
+		    primary_pion_count++;
+		    if(p.ke >= MIN_PION_ENERGY_BNB) primary_pion_count_thresh++;
+		  }
+		// Neutral pions
+		if(p.pdg_code == 22 && p.parent_pdg_code == 111)
+		  {
+		    primary_pi0_map[p.parent_track_id].push_back({i, p.ke});
+		  }
+	      } // end primary loop
+	    
+	    // Nonprimaries
+	    else
 	      {
-		primary_pion_count++;
-		if(p.ke >= MIN_PION_ENERGY_BNB) primary_pion_count_thresh++;
-	      }
-	    // Primary photons
-	    if(p.pdg_code == 22 && p.is_primary && p.parent_pdg_code == 111)
-              {
-                primary_pi0_map[p.parent_track_id].push_back({i, p.ke});
-              }
-	    // Nonprimary photons
-	    if(p.pdg_code == 22 && !p.is_primary && p.parent_pdg_code == 111)
-              {
-                nonprimary_pi0_map[p.parent_track_id].push_back(p.ke);
-              }
+		// Neutral pions
+		if(p.pdg_code == 22 && p.parent_pdg_code == 111)
+		  {
+		    nonprimary_pi0_map[p.parent_track_id].push_back(p.ke);
+		  }
+	      } // end nonprimary loop
+
 	  } // end particle loop
 
 	// Loop over primary pi0s
@@ -446,6 +494,7 @@ namespace cuts
 	s.num_primary_pi0s = primary_pi0_count;
 	s.num_primary_pi0s_thresh = primary_pi0_count_thresh;
 	s.num_nonprimary_pi0s = nonprimary_pi0_count;
+	s.transverse_momentum_mag = sqrt(pow(pT0, 2) + pow(pT1, 2) + pow(pT2, 2));
 	s.is_fiducial = fiducial_cut<T>(interaction);
 	s.has_contained_tracks = track_containment_cut<T>(interaction);
 	if(interaction.nu_id > -1) is_neutrino = true;
@@ -454,9 +503,6 @@ namespace cuts
 	s.is_cc = is_cc;
 	
 	// Add true pi0 info, if it exists
-	TVector3 beamdir(0, 0, 1); // BNB
-        //TVector3 beamdir(0.39431672, 0.04210058, 0.91800973); // NuMI
-
 	double muon_momentum_mag;
 	double muon_beam_costheta;
 	double pi0_leading_photon_energy;
